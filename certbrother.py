@@ -5,6 +5,7 @@ Author: @davidlebr1, updated by @yaleman Apr 2023
 
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any, Dict, Optional, Tuple
 
@@ -17,6 +18,8 @@ import urllib3
 # Remove insecure warning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+
+DATEMATCHER = re.compile(r"(?P<expiry>\d+\/\d{1,2}\/\d{2,4})")
 
 class AppConfig(BaseSettings):
     """settsings"""
@@ -100,10 +103,16 @@ def get_certs(session: HTMLSession, config: AppConfig) -> Dict[int, Dict[str, An
         expired = row.xpath('//span[@class="expired"]')
         # TODO: include the expiry date
         idx = list(row.links)[-1].split("=")[-1]
+        logger.debug(row.text)
         result = {
             "name" : name,
             "expired" : len(expired) > 0,
         }
+
+        date = DATEMATCHER.search(row.text)
+        if date is not None:
+            logger.debug("Cert Expiry Date: {}", date.groupdict().get("expiry"))
+            result["expiry"] = date.groupdict().get("expiry")
         results[idx] = result
 
     return results
@@ -353,8 +362,12 @@ def select_cert(session: HTMLSession, config: AppConfig) -> None:
         raise SelectError(f"Failed to find reference to seconds in select response! {response.text}")
 
 
-def startup() -> Tuple[Any, AppConfig,]:
+def startup(debug: bool) -> Tuple[Any, AppConfig,]:
     """ shared startup things """
+    if not debug:
+        logger.remove(0)
+        # <green>{time:YYYY-MM-DD HH:mm::ss}</green>
+        logger.add(level="INFO", sink=sys.stderr, colorize=True, format="<level>{message}</level>")
     session = HTMLSession()
     config = AppConfig()
     if not Path(config.certificate_path).exists():
@@ -362,6 +375,7 @@ def startup() -> Tuple[Any, AppConfig,]:
             "Couldn't find certificate at {}, bailing!".format(config.certificate_path)
         )
         sys.exit(1)
+    logger.debug("Configuring: {}://{}", config.protocol, config.hostname)
     authenticate(session, config)
     return (session, config,)
 
@@ -371,9 +385,10 @@ def cli() -> None:
 
 # @logger.catch
 @click.command()
-def update() -> bool:
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
+def update(debug: bool=False) -> bool:
     """ Update the certificate file. """
-    session, config = startup()
+    session, config = startup(debug)
     # grab the list of certs
     certs = get_certs(session, config)
     delete_expired(session, config, certs)
@@ -387,16 +402,18 @@ def update() -> bool:
     return True
 
 @click.command()
-def clean() -> None:
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
+def clean(debug: bool=False) -> None:
     """ Clean out expired certificates """
-    session, config = startup()
+    session, config = startup(debug)
     delete_expired(session, config, get_certs(session, config))
 
 @click.command()
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
 @click.option("-j", "--json", "json_format", is_flag=True, default=False, help="Output in JSON format")
-def show(json_format: bool=False) -> bool:
+def show(debug: bool=False, json_format: bool=False) -> bool:
     """ Show the certificates which are installed """
-    session, config = startup()
+    session, config = startup(debug)
     certs = get_certs(session,config)
 
     if json_format:
@@ -406,13 +423,13 @@ def show(json_format: bool=False) -> bool:
         logger.warning("No certificates found!")
         return True
 
-    logger.info("Index\tExpired\tName")
+    logger.info("Index\tExpiry    \tName")
     for idx, cert in certs.items():
         if cert['expired']:
             logfunc = logger.error
         else:
             logfunc = logger.info
-        logfunc("{}  \t{}\t{}", idx, cert['expired'], cert['name'])
+        logfunc("{}  \t{}\t{}", idx, cert.get("expiry", ""), cert['name'])
 
     return True
 

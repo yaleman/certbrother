@@ -6,6 +6,7 @@ Commands:
 
 * update - update the certs
 * show - show the cert status
+* clean - remove any expired certs from the configuration
 
 For help, run `certbrother --help`.
 
