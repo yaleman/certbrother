@@ -21,8 +21,6 @@ CASRL="${CERT_DIR}ca.srl"
 KEYFILE="${CERT_DIR}key.pem"
 CERTFILE="${CERT_DIR}cert.pem"
 CSRFILE="${CERT_DIR}cert.csr"
-CHAINFILE="${CERT_DIR}chain.pem"
-# DHFILE="${CERT_DIR}dh.pem"
 
 
 cat > "${CANAME_FILE}" << DEVEOF
