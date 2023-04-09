@@ -22,5 +22,5 @@ jobs:
         run: |
             python -m pip install --quiet --no-cache-dir --upgrade poetry
             poetry install
-            poetry run ruff $(basename $(pwd) | sed -E 's/-/_/g')
+            poetry run ruff $(basename $(pwd) | sed -E 's/-/_/g').py
             poetry run ruff tests/
