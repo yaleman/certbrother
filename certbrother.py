@@ -26,12 +26,11 @@ DATEMATCHER = re.compile(r"(?P<expiry>\d+\/\d{1,2}\/\d{2,4})")
 class AppConfig(BaseSettings):
     """settsings"""
 
-    hostname: str
-    password: str
+    hostname: str = Field("example.com")
+    password: str = Field("")
     protocol: str = Field("https")
     certificate_path: str = Field(default="./cert.pfx")
-    certificate_password: str
-    loginfield: Optional[str]
+    certificate_password: str = Field("")
 
     class Config:
         """metaconfig"""
