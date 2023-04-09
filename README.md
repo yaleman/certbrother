@@ -7,6 +7,8 @@ Commands:
 * update - update the certs
 * show - show the cert status
 * clean - remove any expired certs from the configuration
+* check - check if there's any expired certs
+* ping - attempt to connect to the configured printer
 
 For help, run `certbrother --help`.
 

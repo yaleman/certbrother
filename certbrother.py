@@ -6,12 +6,14 @@ Author: @davidlebr1, updated by @yaleman Apr 2023
 import json
 from pathlib import Path
 import re
+from ssl import SSLCertVerificationError
 import sys
 from typing import Any, Dict, Optional, Tuple
 
 import click
 from loguru import logger
 from pydantic import BaseSettings, Field
+import requests.exceptions
 from requests_html import HTMLSession # type: ignore
 import urllib3
 
@@ -362,7 +364,7 @@ def select_cert(session: HTMLSession, config: AppConfig) -> None:
         raise SelectError(f"Failed to find reference to seconds in select response! {response.text}")
 
 
-def startup(debug: bool) -> Tuple[Any, AppConfig,]:
+def startup(debug: bool, skip_auth: bool=False) -> Tuple[Any, AppConfig,]:
     """ shared startup things """
     if not debug:
         logger.remove(0)
@@ -370,13 +372,10 @@ def startup(debug: bool) -> Tuple[Any, AppConfig,]:
         logger.add(level="INFO", sink=sys.stderr, colorize=True, format="<level>{message}</level>")
     session = HTMLSession()
     config = AppConfig()
-    if not Path(config.certificate_path).exists():
-        print(
-            "Couldn't find certificate at {}, bailing!".format(config.certificate_path)
-        )
-        sys.exit(1)
     logger.debug("Configuring: {}://{}", config.protocol, config.hostname)
-    authenticate(session, config)
+
+    if not skip_auth:
+        authenticate(session, config)
     return (session, config,)
 
 @click.group()
@@ -391,6 +390,11 @@ def update(debug: bool=False) -> bool:
     session, config = startup(debug)
     # grab the list of certs
     certs = get_certs(session, config)
+    if not Path(config.certificate_path).exists():
+        print(
+            "Couldn't find certificate at {}, bailing!".format(config.certificate_path)
+        )
+        sys.exit(1)
     delete_expired(session, config, certs)
 
     # update the list again so we can check
@@ -433,11 +437,62 @@ def show(debug: bool=False, json_format: bool=False) -> bool:
 
     return True
 
+@click.command()
+@click.option("-h", "--hostname")
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
+def ping(hostname: Optional[str] = None, debug: bool=False) -> None:
+    """ Check to see if you can connect """
+    session, config = startup(debug, skip_auth=True)
+
+    if hostname is not None:
+        config.hostname = hostname
+
+    logger.debug("Checking {}", config.hostname)
+
+    try:
+        response = session.get(config.url(), verify=True)
+        response.raise_for_status()
+        logger.success("OK")
+        return
+    except SSLCertVerificationError as tls_error:
+        logger.error("TLS Error connecting: {}", tls_error)
+    except requests.exceptions.SSLError as tls_error:
+        logger.error("TLS Error connecting: {}", tls_error)
+    sys.exit(1)
+
+@click.command()
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
+def check(debug: bool=False) -> None:
+    """ Check to see if there's any expired certs """
+    session, config = startup(debug)
+    logger.debug("Checking {}", config.hostname)
+
+    try:
+        certs = get_certs(session, config)
+        has_expired = False
+        for _, cert in certs.items():
+            if cert['expired']:
+                has_expired = True
+
+        if has_expired:
+            logger.error("FAIL")
+            sys.exit(1)
+        logger.success("OK")
+        return
+    except SSLCertVerificationError as tls_error:
+        logger.error("TLS Error connecting: {}", tls_error)
+    except requests.exceptions.SSLError as tls_error:
+        logger.error("TLS Error connecting: {}", tls_error)
+    sys.exit(1)
+
+
 def main() -> None:
     """ main function """
     cli.add_command(update)
     cli.add_command(show)
+    cli.add_command(check)
     cli.add_command(clean)
+    cli.add_command(ping)
 
     try:
         if cli():
