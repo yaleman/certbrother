@@ -12,19 +12,20 @@ from typing import Any, Dict, Optional, Tuple
 
 import click
 from loguru import logger
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import SettingsConfigDict, BaseSettings
 import requests.exceptions
-from requests_html import HTMLSession # type: ignore
+from requests_html import HTMLSession  # type: ignore
 import urllib3
 
 # Remove insecure warning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-
 DATEMATCHER = re.compile(r"(?P<expiry>\d+\/\d{1,2}\/\d{2,4})")
 
+
 class AppConfig(BaseSettings):
-    """settsings"""
+    """settings for the app"""
 
     hostname: str = Field("example.com")
     password: str = Field("")
@@ -32,11 +33,7 @@ class AppConfig(BaseSettings):
     certificate_path: str = Field(default="./cert.pfx")
     certificate_password: str = Field("")
 
-    class Config:
-        """metaconfig"""
-
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     def url(self, endpoint: Optional[str] = None) -> str:
         """get the base URL for the device"""
@@ -47,10 +44,16 @@ class AppConfig(BaseSettings):
 
 class AuthError(Exception):
     """failed to login"""
+
+
 class DeleteError(Exception):
     """failed to delete the cert"""
+
+
 class SelectError(Exception):
     """failed to select the cert"""
+
+
 class UploadError(Exception):
     """failed to delete the cert"""
 
@@ -59,9 +62,7 @@ def authenticate(session: HTMLSession, config: AppConfig) -> None:
     """returns the login field name"""
     # Get CSRF token from login
     logger.debug("Logging in...")
-    response = session.get(
-        config.url("/general/status.html"), verify=False
-    )
+    response = session.get(config.url("/general/status.html"), verify=False)
     token = response.html.xpath('//*[@id="CSRFToken"]')[0].attrs["value"]
     logger.trace(f"CSRF token is: {token}")
     # Authenticate
@@ -88,26 +89,26 @@ def authenticate(session: HTMLSession, config: AppConfig) -> None:
 
 
 def get_certs(session: HTMLSession, config: AppConfig) -> Dict[int, Dict[str, Any]]:
-    """ get the list of certificates"""
+    """get the list of certificates"""
     response = session.get(
         config.url("/net/security/certificate/certificate.html"),
         verify=False,
     )
 
     results = {}
-    rows = response.html.xpath('//tr')
+    rows = response.html.xpath("//tr")
     for row in rows:
         if "Export" not in row.text:
             # we've got the header
             continue
-        name = row.xpath('//td')[0].text
+        name = row.xpath("//td")[0].text
         expired = row.xpath('//span[@class="expired"]')
         # TODO: include the expiry date
         idx = list(row.links)[-1].split("=")[-1]
         logger.debug(row.text)
         result = {
-            "name" : name,
-            "expired" : len(expired) > 0,
+            "name": name,
+            "expired": len(expired) > 0,
         }
 
         date = DATEMATCHER.search(row.text)
@@ -118,10 +119,13 @@ def get_certs(session: HTMLSession, config: AppConfig) -> Dict[int, Dict[str, An
 
     return results
 
-def delete_expired(session: HTMLSession, config: AppConfig, certs: Dict[int, Any]) -> None:
-    """ deletes all the expired certs """
+
+def delete_expired(
+    session: HTMLSession, config: AppConfig, certs: Dict[int, Any]
+) -> None:
+    """deletes all the expired certs"""
     for idx, cert in certs.items():
-        if not cert['expired']:
+        if not cert["expired"]:
             logger.info("Skipping not-expired certificate {}", cert)
             continue
         logger.info("Deleting idx={} cert={}", idx, cert)
@@ -132,17 +136,15 @@ def delete_expired(session: HTMLSession, config: AppConfig, certs: Dict[int, Any
         )
 
         paramsPost = {
-            "pageid" : 380, # TODO: this is probably unneeded?
-            "CSRFToken" : get_csrf_token(response),
+            "pageid": 380,  # TODO: this is probably unneeded?
+            "CSRFToken": get_csrf_token(response),
         }
-        input_fields = response.html.xpath(
-            "//*[@class=\"contentsGroup\"]//input"
-        )
+        input_fields = response.html.xpath('//*[@class="contentsGroup"]//input')
         for field in input_fields:
-            if field.attrs['id'] == 'hidden_certificate_idx':
-                paramsPost['hidden_certificate_idx'] = idx
+            if field.attrs["id"] == "hidden_certificate_idx":
+                paramsPost["hidden_certificate_idx"] = idx
             else:
-                paramsPost[field.attrs['name']] = field.attrs['value']
+                paramsPost[field.attrs["name"]] = field.attrs["value"]
         response = session.post(
             config.url("/net/security/certificate/delete.html"),
             data=paramsPost,
@@ -163,18 +165,16 @@ def delete_expired(session: HTMLSession, config: AppConfig, certs: Dict[int, Any
 
 
 def upload_cert(session: HTMLSession, config: AppConfig) -> None:
-    """ Upload the new certificate """
+    """Upload the new certificate"""
 
     # get the page ID
-    response = session.get(
-        config.url("/net/security/certificate/certificate.html")
-    )
+    response = session.get(config.url("/net/security/certificate/certificate.html"))
     importlink = response.html.xpath('//*[@id="pageContents"]/form/div[6]/p/a')
     logger.debug("Import link: {}", importlink)
     if not importlink:
         raise UploadError("Couldn't find import link!")
 
-    importlink = importlink[0].attrs['href']
+    importlink = importlink[0].attrs["href"]
 
     pageid = importlink.split("=")[-1]
 
@@ -183,14 +183,14 @@ def upload_cert(session: HTMLSession, config: AppConfig) -> None:
         config.url(f"/net/security/certificate/{importlink}"),
         verify=False,
     )
-    token = response.html.xpath(
-        '//div[contains(@class, "CSRFToken")]' #
-    )[0].xpath("//input")[0].attrs['value']
-    logger.trace("CSRF token {}",  token)
-
-    input_fields = response.html.xpath(
-        "//*[@class=\"contentsGroup\"]//input"
+    token = (
+        response.html.xpath('//div[contains(@class, "CSRFToken")]')[0]  #
+        .xpath("//input")[0]
+        .attrs["value"]
     )
+    logger.trace("CSRF token {}", token)
+
+    input_fields = response.html.xpath('//*[@class="contentsGroup"]//input')
 
     payload = {
         "CSRFToken": token,
@@ -198,14 +198,14 @@ def upload_cert(session: HTMLSession, config: AppConfig) -> None:
     }
     for field in input_fields:
         if field.attrs.get("type") == "password":
-            payload[field.attrs['name']] = config.certificate_password
+            payload[field.attrs["name"]] = config.certificate_password
         elif field.attrs.get("type") == "file":
-            logger.debug("file field: {}", field.attrs.get('id'))
-            file_field = field.attrs.get('id')
-        elif field.attrs.get('id') == 'hidden_cert_import_password':
-            payload[field.attrs['name']] = config.certificate_password
+            logger.debug("file field: {}", field.attrs.get("id"))
+            file_field = field.attrs.get("id")
+        elif field.attrs.get("id") == "hidden_cert_import_password":
+            payload[field.attrs["name"]] = config.certificate_password
         else:
-            payload[field.attrs['name']] = field.attrs.get("value")
+            payload[field.attrs["name"]] = field.attrs.get("value")
 
     headers = {
         "Origin": config.url(),
@@ -227,7 +227,7 @@ def upload_cert(session: HTMLSession, config: AppConfig) -> None:
 
     paramsMultipart = {
         file_field: open(config.certificate_path, "rb"),
-        }
+    }
     response = session.post(
         config.url("/net/security/certificate/import.html"),
         data=payload,
@@ -240,7 +240,7 @@ def upload_cert(session: HTMLSession, config: AppConfig) -> None:
 
     error = response.html.find("div", containing="rejected")
     if not error:
-        error = response.html.xpath("//p[@class=\"errorMessage\"]")
+        error = response.html.xpath('//p[@class="errorMessage"]')
     if error:
         if isinstance(error, list):
             error = error[0].text
@@ -249,79 +249,74 @@ def upload_cert(session: HTMLSession, config: AppConfig) -> None:
     else:
         logger.success("The certificate has been successfully uploaded!")
 
+
 def get_error(response: Any, exception: Any, message: str) -> Optional[Any]:
     error = response.html.find("div", containing="rejected")
     if not error:
-        error = response.html.xpath("//p[@class=\"errorMessage\"]")
+        error = response.html.xpath('//p[@class="errorMessage"]')
     if error:
         if isinstance(error, list):
             error = error[0].text
         raise exception(message.format(error))
     return error
 
+
 def get_csrf_token(response: Any) -> str:
-    """ Gets the CSRF token"""
-    token: str = response.html.xpath(
-        '//div[contains(@class, "CSRFToken")]' #
-    )[0].xpath("//input")[0].attrs['value']
-    logger.debug("token {}",  token)
+    """Gets the CSRF token"""
+    token: str = (
+        response.html.xpath('//div[contains(@class, "CSRFToken")]')[0]  #
+        .xpath("//input")[0]
+        .attrs["value"]
+    )
+    logger.debug("token {}", token)
     return token
 
+
 def select_cert(session: HTMLSession, config: AppConfig) -> None:
-    """ Select certificate in HTTP Server Settings"""
+    """Select certificate in HTTP Server Settings"""
     # Get CSRF Token
-    response = session.get(
-        config.url("/net/net/certificate/http.html"), verify=False
-    )
+    response = session.get(config.url("/net/net/certificate/http.html"), verify=False)
     token = response.html.xpath(
         "/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[2]/input"
     )[0].attrs["value"]
 
     # Get the Cert from dropdown
     cert_dropdown_id = response.html.xpath(
-        "/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[4]/dl[1]/dd/select/option[2]" # TODO: this is ... not what we wanted
+        "/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[4]/dl[1]/dd/select/option[2]"  # TODO: this is ... not what we wanted
     )[0].attrs["value"]
 
+    input_fields = response.html.xpath('//*[@class="contentsGroup"]//input')
 
-    input_fields = response.html.xpath(
-        "//*[@class=\"contentsGroup\"]//input"
-    )
-
-    selectbox = response.html.xpath(
-        "//select[contains(@name,\"B\")]"
-    )
+    selectbox = response.html.xpath('//select[contains(@name,"B")]')
 
     if not selectbox:
         raise SelectError("Couldn't find the select box!")
 
-    selectbox = selectbox[0].attrs['id']
+    selectbox = selectbox[0].attrs["id"]
 
     payload = {
         "CSRFToken": token,
         "pageid": 325,
-        selectbox : cert_dropdown_id,
-        "http_page_mode": 0
+        selectbox: cert_dropdown_id,
+        "http_page_mode": 0,
     }
     for field in input_fields:
         logger.debug("{}", field)
         if field.attrs.get("type") == "password":
-            payload[field.attrs['name']] = config.certificate_password
-        elif field.attrs.get('id') == 'hidden_cert_import_password':
-            payload[field.attrs['name']] = config.certificate_password
+            payload[field.attrs["name"]] = config.certificate_password
+        elif field.attrs.get("id") == "hidden_cert_import_password":
+            payload[field.attrs["name"]] = config.certificate_password
         else:
-            if field.attrs.get('checked'):
-                payload[field.attrs['name']] = 1
+            if field.attrs.get("checked"):
+                payload[field.attrs["name"]] = 1
             else:
-                payload[field.attrs['name']] = field.attrs['value']
+                payload[field.attrs["name"]] = field.attrs["value"]
 
     logger.debug("Cert selection screen payload: {}", json.dumps(payload, indent=4))
 
-    response = session.post(
-        config.url("/net/net/certificate/http.html"), data=payload
-    )
+    response = session.post(config.url("/net/net/certificate/http.html"), data=payload)
 
     token = get_csrf_token(response)
-
 
     headers = {
         "Origin": config.url(),
@@ -340,52 +335,68 @@ def select_cert(session: HTMLSession, config: AppConfig) -> None:
         "Sec-Fetch-User": "?1",
         "Accept-Language": "en-CA,en-US;q=0.7,en;q=0.3",
     }
-    input_fields = response.html.xpath(
-            "//*[@class=\"contentsButtons\"]//input"
-        )
+    input_fields = response.html.xpath('//*[@class="contentsButtons"]//input')
     logger.debug(input_fields)
 
     # here we need to then click the yes button.
     payload = {
-            "CSRFToken" : token,
-            "pageid" : 325, # <input type="hidden" id="pageid" name="pageid" value="325">
-            "http_page_mode" : 5,
-        }
+        "CSRFToken": token,
+        "pageid": 325,  # <input type="hidden" id="pageid" name="pageid" value="325">
+        "http_page_mode": 5,
+    }
     for input in input_fields:
-        if input.attrs.get('id', "").startswith("B"):
-            payload[input.attrs['id']] = input.attrs['value']
-    logger.debug("Finalizing cert selection, payload: {}", json.dumps(payload, indent=4))
+        if input.attrs.get("id", "").startswith("B"):
+            payload[input.attrs["id"]] = input.attrs["value"]
+    logger.debug(
+        "Finalizing cert selection, payload: {}", json.dumps(payload, indent=4)
+    )
     response = session.post(
-        config.url("/net/net/certificate/http.html"), data=payload, headers=headers,
+        config.url("/net/net/certificate/http.html"),
+        data=payload,
+        headers=headers,
     )
     get_error(response, SelectError, "Failed to do the final submit: {}")
-    if  "seconds" not in response.text.lower():
-        raise SelectError(f"Failed to find reference to seconds in select response! {response.text}")
+    if "seconds" not in response.text.lower():
+        raise SelectError(
+            f"Failed to find reference to seconds in select response! {response.text}"
+        )
 
 
-def startup(debug: bool, skip_auth: bool=False) -> Tuple[Any, AppConfig,]:
-    """ shared startup things """
+def startup(
+    debug: bool, skip_auth: bool = False
+) -> Tuple[Any, AppConfig,]:
+    """shared startup things"""
     if not debug:
         logger.remove(0)
         # <green>{time:YYYY-MM-DD HH:mm::ss}</green>
-        logger.add(level="INFO", sink=sys.stderr, colorize=True, format="<level>{message}</level>")
+        logger.add(
+            level="INFO",
+            sink=sys.stderr,
+            colorize=True,
+            format="<level>{message}</level>",
+        )
     session = HTMLSession()
     config = AppConfig()
     logger.debug("Configuring: {}://{}", config.protocol, config.hostname)
 
     if not skip_auth:
         authenticate(session, config)
-    return (session, config,)
+    return (
+        session,
+        config,
+    )
+
 
 @click.group()
 def cli() -> None:
     pass
 
+
 # @logger.catch
 @click.command()
 @click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
-def update(debug: bool=False) -> bool:
-    """ Update the certificate file. """
+def update(debug: bool = False) -> bool:
+    """Update the certificate file."""
     session, config = startup(debug)
     # grab the list of certs
     certs = get_certs(session, config)
@@ -404,20 +415,29 @@ def update(debug: bool=False) -> bool:
     logger.success("Completed cert update!")
     return True
 
-@click.command()
-@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
-def clean(debug: bool=False) -> None:
-    """ Clean out expired certificates """
-    session, config = startup(debug)
-    delete_expired(session, config, get_certs(session, config))
 
 @click.command()
 @click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
-@click.option("-j", "--json", "json_format", is_flag=True, default=False, help="Output in JSON format")
-def show(debug: bool=False, json_format: bool=False) -> bool:
-    """ Show the certificates which are installed """
+def clean(debug: bool = False) -> None:
+    """Clean out expired certificates"""
     session, config = startup(debug)
-    certs = get_certs(session,config)
+    delete_expired(session, config, get_certs(session, config))
+
+
+@click.command()
+@click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
+@click.option(
+    "-j",
+    "--json",
+    "json_format",
+    is_flag=True,
+    default=False,
+    help="Output in JSON format",
+)
+def show(debug: bool = False, json_format: bool = False) -> bool:
+    """Show the certificates which are installed"""
+    session, config = startup(debug)
+    certs = get_certs(session, config)
 
     if json_format:
         print(json.dumps(certs, default=str))
@@ -428,19 +448,20 @@ def show(debug: bool=False, json_format: bool=False) -> bool:
 
     logger.info("Index\tExpiry    \tName")
     for idx, cert in certs.items():
-        if cert['expired']:
+        if cert["expired"]:
             logfunc = logger.error
         else:
             logfunc = logger.info
-        logfunc("{}  \t{}\t{}", idx, cert.get("expiry", ""), cert['name'])
+        logfunc("{}  \t{}\t{}", idx, cert.get("expiry", ""), cert["name"])
 
     return True
+
 
 @click.command()
 @click.option("-h", "--hostname")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
-def ping(hostname: Optional[str] = None, debug: bool=False) -> None:
-    """ Check to see if you can connect """
+def ping(hostname: Optional[str] = None, debug: bool = False) -> None:
+    """Check to see if you can connect"""
     session, config = startup(debug, skip_auth=True)
 
     if hostname is not None:
@@ -459,10 +480,11 @@ def ping(hostname: Optional[str] = None, debug: bool=False) -> None:
         logger.error("TLS Error connecting: {}", tls_error)
     sys.exit(1)
 
+
 @click.command()
 @click.option("-d", "--debug", is_flag=True, default=False, help="Debug mode.")
-def check(debug: bool=False) -> None:
-    """ Check to see if there's any expired certs """
+def check(debug: bool = False) -> None:
+    """Check to see if there's any expired certs"""
     session, config = startup(debug)
     logger.debug("Checking {}", config.hostname)
 
@@ -470,7 +492,7 @@ def check(debug: bool=False) -> None:
         certs = get_certs(session, config)
         has_expired = False
         for _, cert in certs.items():
-            if cert['expired']:
+            if cert["expired"]:
                 has_expired = True
 
         if has_expired:
@@ -486,7 +508,7 @@ def check(debug: bool=False) -> None:
 
 
 def main() -> None:
-    """ main function """
+    """main function"""
     cli.add_command(update)
     cli.add_command(show)
     cli.add_command(check)
@@ -503,6 +525,7 @@ def main() -> None:
     except UploadError as error:
         logger.error("Failed to upload cert: {}", error)
     sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
