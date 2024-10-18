@@ -14,7 +14,7 @@ urllib3 = "^2.2.3"
 requests-html = "^0.10.0"
 loguru = "^0.7.2"
 click = "^8.1.7"
-pydantic-settings = "^2.5.2"
+pydantic-settings = "^2.6.0"
 
 [tool.poetry.dependencies.pydantic]
 extras = [
