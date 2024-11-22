@@ -20,7 +20,7 @@ pydantic-settings = "^2.6.1"
 extras = [
     "dotenv",
 ]
-version = "^2.9"
+version = "^2.10"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.7.4"
