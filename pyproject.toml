@@ -9,7 +9,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-requests = "^2.32.4"
+requests = "^2.32.5"
 urllib3 = "^2.5.0"
 requests-html = "^0.10.0"
 loguru = "^0.7.3"
