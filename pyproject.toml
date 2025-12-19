@@ -23,7 +23,7 @@ extras = [
 version = "^2.12"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.14.9"
+ruff = "^0.14.10"
 mypy = "^1.19.0"
 pytest = "^9.0.2"
 black = "^25.12.0"
