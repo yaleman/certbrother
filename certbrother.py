@@ -15,8 +15,9 @@ from loguru import logger
 from pydantic import Field
 from pydantic_settings import SettingsConfigDict, BaseSettings
 import requests.exceptions
-from requests_html import HTMLSession  # type: ignore
+from requests_html import HTMLSession
 import urllib3
+import urllib3.exceptions
 
 # Remove insecure warning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -58,7 +59,7 @@ class UploadError(Exception):
     """failed to delete the cert"""
 
 
-def authenticate(session: HTMLSession, config: AppConfig) -> None:
+def authenticate(session: Any, config: AppConfig) -> None:
     """returns the login field name"""
     # Get CSRF token from login
     logger.debug("Logging in...")
@@ -76,9 +77,7 @@ def authenticate(session: HTMLSession, config: AppConfig) -> None:
         "CSRFToken": token,
         "loginurl": "/general/status.html",
     }
-    response = session.post(
-        config.url("/general/status.html"), data=paramsPost, verify=False
-    )
+    response = session.post(config.url("/general/status.html"), data=paramsPost, verify=False)
 
     # if the login box shows up again then they've failed to login
     if response.html.xpath('//*[@id="LogBox"]'):
@@ -96,7 +95,7 @@ def get_certs(session: HTMLSession, config: AppConfig) -> Dict[int, Dict[str, An
     )
 
     results = {}
-    rows = response.html.xpath("//tr")
+    rows = response.html.xpath("//tr")  # ty:ignore[unresolved-attribute]
     for row in rows:
         if "Export" not in row.text:
             # we've got the header
@@ -120,9 +119,7 @@ def get_certs(session: HTMLSession, config: AppConfig) -> Dict[int, Dict[str, An
     return results
 
 
-def delete_expired(
-    session: HTMLSession, config: AppConfig, certs: Dict[int, Any]
-) -> None:
+def delete_expired(session: Any, config: AppConfig, certs: Dict[int, Any]) -> None:
     """deletes all the expired certs"""
     for idx, cert in certs.items():
         if not cert["expired"]:
@@ -155,16 +152,14 @@ def delete_expired(
             config.url(f"/net/security/certificate/delete.html?idx={idx}"),
             verify=False,
         )
-        is_deleted = response.html.xpath(
-            "/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[3]/p"
-        )
+        is_deleted = response.html.xpath("/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[3]/p")
         if is_deleted:
             logger.success("The certificate idx {} was successfully deleted", idx)
         else:
             raise DeleteError(f"The certificate idx {idx} has not been deleted")
 
 
-def upload_cert(session: HTMLSession, config: AppConfig) -> None:
+def upload_cert(session: Any, config: AppConfig) -> None:
     """Upload the new certificate"""
 
     # get the page ID
@@ -272,13 +267,11 @@ def get_csrf_token(response: Any) -> str:
     return token
 
 
-def select_cert(session: HTMLSession, config: AppConfig) -> None:
+def select_cert(session: Any, config: AppConfig) -> None:
     """Select certificate in HTTP Server Settings"""
     # Get CSRF Token
     response = session.get(config.url("/net/net/certificate/http.html"), verify=False)
-    token = response.html.xpath(
-        "/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[2]/input"
-    )[0].attrs["value"]
+    token = response.html.xpath("/html/body/div/div/div[2]/div[2]/div[2]/div/div/div[2]/form/div[2]/input")[0].attrs["value"]
 
     # Get the Cert from dropdown
     cert_dropdown_id = response.html.xpath(
@@ -347,9 +340,7 @@ def select_cert(session: HTMLSession, config: AppConfig) -> None:
     for input in input_fields:
         if input.attrs.get("id", "").startswith("B"):
             payload[input.attrs["id"]] = input.attrs["value"]
-    logger.debug(
-        "Finalizing cert selection, payload: {}", json.dumps(payload, indent=4)
-    )
+    logger.debug("Finalizing cert selection, payload: {}", json.dumps(payload, indent=4))
     response = session.post(
         config.url("/net/net/certificate/http.html"),
         data=payload,
@@ -357,14 +348,15 @@ def select_cert(session: HTMLSession, config: AppConfig) -> None:
     )
     get_error(response, SelectError, "Failed to do the final submit: {}")
     if "seconds" not in response.text.lower():
-        raise SelectError(
-            f"Failed to find reference to seconds in select response! {response.text}"
-        )
+        raise SelectError(f"Failed to find reference to seconds in select response! {response.text}")
 
 
 def startup(
     debug: bool, skip_auth: bool = False
-) -> Tuple[Any, AppConfig,]:
+) -> Tuple[
+    HTMLSession,
+    AppConfig,
+]:
     """shared startup things"""
     if not debug:
         logger.remove(0)
@@ -401,9 +393,7 @@ def update(debug: bool = False) -> bool:
     # grab the list of certs
     certs = get_certs(session, config)
     if not Path(config.certificate_path).exists():
-        print(
-            "Couldn't find certificate at {}, bailing!".format(config.certificate_path)
-        )
+        print("Couldn't find certificate at {}, bailing!".format(config.certificate_path))
         sys.exit(1)
     delete_expired(session, config, certs)
 
