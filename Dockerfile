@@ -1,4 +1,6 @@
-FROM python:3-slim
+FROM python:3.13-slim
+
+RUN pip install --no-cache-dir uv
 
 ########################################
 # add a user so we're not running as root
@@ -10,19 +12,18 @@ RUN apt-get install -y git
 RUN apt-get clean
 
 RUN mkdir -p /home/useruser/certbrother
-RUN chown useruser /home/useruser -R
-
-USER useruser
-
 WORKDIR /home/useruser/certbrother
 
 COPY pyproject.toml .
-COPY poetry.lock .
+COPY uv.lock .
 COPY certbrother.py .
 COPY README.md .
 COPY .env.example .env
+RUN chown useruser:useruser /home/useruser -R
 
-RUN python -m pip install .
+USER useruser
+ENV UV_LINK_MODE=copy
+RUN uv --no-config sync --no-dev
 
-ENTRYPOINT ["/home/useruser/.local/bin/certbrother"]
+ENTRYPOINT ["/home/useruser/certbrother/.venv/bin/certbrother"]
 CMD [""]

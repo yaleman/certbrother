@@ -15,7 +15,7 @@ For help, run `certbrother --help`.
 Example showing a printer with an expired and a valid cert:
 
 ```shell
-11:34:23 ❯ poetry run python certbrother.py show
+uv run certbrother show
 2023-04-09 11:35:38.417 | SUCCESS  | certbrother:authenticate:83 - Login OK
 2023-04-09 11:35:39.811 | INFO     | certbrother:show:439 - Index  Expired  Name
 2023-04-09 11:35:39.811 | INFO     | certbrother:show:445 - 13     False    printer.example.com
@@ -52,10 +52,18 @@ It'll create the cert file called `printer.pfx` in the local directory with the 
 
 ## Installation
 
-This *should* install directly from git or you can clone and then install.
+Use `uv` for local development and installation.
 
 ```shell
 git clone https://github.com/yaleman/certbrother
-python -m pip install ./certbrother
+cd certbrother
+uv sync --dev
+uv run certbrother --help
+```
+
+If you want a standalone CLI install instead of a project checkout:
+
+```shell
+uv tool install git+https://github.com/yaleman/certbrother
 certbrother --help
 ```
