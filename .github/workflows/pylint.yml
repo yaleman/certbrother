@@ -18,6 +18,6 @@ jobs:
           enable-cache: true
       - name: Running ruff
         run: |
-          uv --no-config sync --locked --dev
+          uv --no-config sync --dev
           uv run ruff check certbrother.py
           uv run ruff check tests/

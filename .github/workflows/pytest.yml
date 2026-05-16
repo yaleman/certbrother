@@ -19,5 +19,5 @@ jobs:
       - name: Running pytest
         run: |
           python --version
-          uv --no-config sync --locked --dev
+          uv --no-config sync --dev
           uv run pytest
