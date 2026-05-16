@@ -37,5 +37,5 @@ line-length = 200
 py-modules = ["certbrother"]
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
