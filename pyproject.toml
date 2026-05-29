@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [{ name = "James Hodgkinson", email = "james@terminaloutcomes.com" }]
 requires-python = ">=3.13"
 dependencies = [
-    "click>=8.3.3,<9.0.0",
+    "click>=8.4.1,<9.0.0",
     "loguru>=0.7.3,<0.8.0",
     "lxml-html-clean>=0.4.5,<0.5.0",
     "pydantic>=2.13.4",
