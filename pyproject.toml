@@ -23,7 +23,7 @@ certbrother = "certbrother:main"
 [dependency-groups]
 dev = [
     "black>=26.5.1,<27.0.0",
-    "pytest>=9.0.3,<10.0.0",
+    "pytest>=9.1.1,<10.0.0",
     "ruff>=0.15.18,<0.16.0",
     "ty>=0.0.49,<0.0.50",
     "types-requests>=2.33.0.20260518,<3.0.0.0",
